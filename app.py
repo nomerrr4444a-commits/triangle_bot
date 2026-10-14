@@ -56,7 +56,6 @@ def simulate_triangle_trading():
       price_eth_btc = tickers["ETH/BTC"]["ask"]
       price_eth_usdt = tickers["ETH/USDT"]["bid"]
 
-      # Початковий капітал
       start_amount = 100.0
       fee_rate = 0.001  # 0.1% комісія біржі за кожну угоду
 
@@ -69,7 +68,6 @@ def simulate_triangle_trading():
       # Крок 3: Продаємо ETH назад за USDT (мінус комісія)
       end_amount = (eth_amount * price_eth_usdt) * (1 - fee_rate)
 
-      # Чистий результат угоди
       profit_loss = end_amount - start_amount
 
       if profit_loss > 0:
@@ -91,7 +89,6 @@ def simulate_triangle_trading():
       )
       bot.send_message(user_chat_id, msg, parse_mode="HTML")
 
-      # Перевірка кожну хвилину
       time.sleep(60)
 
     except Exception as e:
