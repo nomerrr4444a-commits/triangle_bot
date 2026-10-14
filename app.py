@@ -4,27 +4,24 @@ import ccxt
 from flask import Flask
 import telebot
 
-# 1. Веб-сервер для Render (обязательно, чтобы хостинг не выдавал ошибку)
 app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-  return "🤖 Crypto Arb Bot & Triangle Simulator is running successfully!"
+  return "🤖 Bot is running!"
 
 
-# 2. Настройка Telegram бота
+# Встав сюди свій токен від BotFather:
 TOKEN = "8635304491:AAEBvuKCl5Prbryev195nFcqA3_uCIzYsnc"
 bot = telebot.TeleBot(TOKEN)
 
-# Подключение к бирже для получения реальных цен
 exchange = ccxt.binance({"enableRateLimit": True})
 
-# Виртуальный капитал и статистика
 virtual_balance = 100.0
 total_profit = 0.0
 total_loss = 0.0
-user_chat_id = None  # Сюда автоматически запишется твой ID
+user_chat_id = None
 
 
 @bot.message_handler(commands=["start"])
@@ -33,8 +30,8 @@ def send_welcome(message):
   user_chat_id = message.chat.id
   bot.reply_to(
       message,
-      "🤖 Симулятор трикутників активовано!\nЯ стежу за ринком і надсилатиму"
-      " звіти про кожну угоду сюди.",
+      "🤖 Симулятор трикутників активовано!\nЯ рахую результати з урахуванням"
+      " комісій на кожному кроці з банку $100.",
   )
   print(f"✅ Збережено Chat ID користувача: {user_chat_id}")
 
@@ -42,33 +39,38 @@ def send_welcome(message):
 def simulate_triangle_trading():
   global virtual_balance, total_profit, total_loss
 
-  print("⏳ Чекаю команду /start у Telegram від тебе...")
+  print("⏳ Чекаю команду /start у Telegram...")
   while user_chat_id is None:
     time.sleep(1)
 
   bot.send_message(
-      user_chat_id, "🚀 Симулятор угод запущено! Початковий банк: $100.00"
+      user_chat_id,
+      "🚀 Симулятор запущено! Початковий банк: $100.00 (комісія 0.1% на кожній"
+      " операції)",
   )
 
   while True:
     try:
-      # Загружаем реальные цены для треугольника
       tickers = exchange.fetch_tickers(["BTC/USDT", "ETH/BTC", "ETH/USDT"])
-
       price_btc_usdt = tickers["BTC/USDT"]["ask"]
       price_eth_btc = tickers["ETH/BTC"]["ask"]
       price_eth_usdt = tickers["ETH/USDT"]["bid"]
 
-      # Расчет результата круга на $100
+      # Початковий капітал
       start_amount = 100.0
-      step1 = start_amount / price_btc_usdt  # Купили BTC
-      step2 = step1 / price_eth_btc  # Купили ETH за BTC
-      end_amount = step2 * price_eth_usdt  # Продали ETH за USDT
+      fee_rate = 0.001  # 0.1% комісія біржі за кожну угоду
 
-      # Комиссия биржи (~0.3% за 3 шага)
-      fee = end_amount * 0.003
-      net_result = end_amount - fee
-      profit_loss = net_result - start_amount
+      # Крок 1: Купуємо BTC за USDT (мінус комісія)
+      btc_amount = (start_amount / price_btc_usdt) * (1 - fee_rate)
+
+      # Крок 2: Купуємо ETH за BTC (мінус комісія)
+      eth_amount = (btc_amount / price_eth_btc) * (1 - fee_rate)
+
+      # Крок 3: Продаємо ETH назад за USDT (мінус комісія)
+      end_amount = (eth_amount * price_eth_usdt) * (1 - fee_rate)
+
+      # Чистий результат угоди
+      profit_loss = end_amount - start_amount
 
       if profit_loss > 0:
         trade_type = "🟢 ТЕЙК (ПРИБУТОК)"
@@ -79,23 +81,21 @@ def simulate_triangle_trading():
 
       virtual_balance += profit_loss
 
-      # Формируем отчет в Telegram
       msg = (
           f"🔄 <b>Угоду закрито!</b>\n\n"
           f"📊 Статус: {trade_type}\n"
-          f"💵 Результат угоди: <code>{round(profit_loss, 2)} $</code>\n"
+          f"💵 Результат угоди: <code>{round(profit_loss, 4)} $</code>\n"
           f"💰 Загальний баланс: <code>{round(virtual_balance, 2)} $</code>\n"
           f"📈 Загальний прибуток: +{round(total_profit, 2)} $\n"
           f"📉 Загальний мінус: -{round(total_loss, 2)} $\n"
       )
-
       bot.send_message(user_chat_id, msg, parse_mode="HTML")
 
-      # Пауза между симуляциями угод (например, 60 секунд)
+      # Перевірка кожну хвилину
       time.sleep(60)
 
     except Exception as e:
-      print(f"Помилка в симуляторі: {e}")
+      print(f"Помилка: {e}")
       time.sleep(10)
 
 
@@ -104,13 +104,8 @@ def run_telegram_bot():
 
 
 if __name__ == "__main__":
-  # Запускаем симулятор в отдельном потоке
   t1 = threading.Thread(target=simulate_triangle_trading, daemon=True)
   t1.start()
-
-  # Запускаем Telegram-бота в отдельном потоке
   t2 = threading.Thread(target=run_telegram_bot, daemon=True)
   t2.start()
-
-  # Запускаем Flask-сервер (нужно для Render)
   app.run(host="0.0.0.0", port=10000)
